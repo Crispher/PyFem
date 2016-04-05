@@ -100,8 +100,6 @@ def compute_stiffness_matrix_quad9(nodes, material, thickness):
             [ xi*(xi-1)*(2*eta-1),  xi*(xi+1)*(2*eta-1),  xi*(xi+1)*(2*eta+1),  xi*(xi-1)*(2*eta+1),  2*(1-xi**2)*(2*eta-1), -4*xi*(xi+1)*eta,      2*(1-xi**2)*(2*eta+1), -4*xi*(xi-1)*eta,      -8*(1-xi**2)*eta ]
         ])
         
-    print(Partials(-1, -1))
-        
     def Jacobi(xi, eta):
         partials = Partials(xi, eta)
         coords = row_stack(nodes)
@@ -116,15 +114,11 @@ def compute_stiffness_matrix_quad9(nodes, material, thickness):
         p = Partial_xy(xi, eta)
         zeros9 = [0 for i in range(9)]
         # the list(chain(*zip(~,~))) operation interleaves two array, if that is confusing to you, see quad4's implementation
-        print(p)
         return array([
             list(chain(*zip(p[0,:], zeros9))),
             list(chain(*zip(zeros9, p[1,:]))),
             list(chain(*zip(p[1,:], p[0,:]))),
         ])
-    
-    print(compute_B(0.5, 0.5))
-    return
     
     E, v = material
     D = array([
@@ -146,4 +140,4 @@ def test():
     nodes = array([ [0,0], [2,0], [2,2], [0,2], [1,0], [2,1], [1,2], [0,1], [1,1] ])
     compute_stiffness_matrix_quad9(nodes, (1, 0.3), 1)
     
-test()
+# test()

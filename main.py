@@ -59,6 +59,7 @@ class Element:
         if self.type == 'RECTANGLE9':
             self._apply_force_quad9(line_force, coords)
             return
+        print(self.type)
         assert(0)
         
     # keeping accordance with FEMT, use left handed forces by default
@@ -83,9 +84,9 @@ class Element:
         
     def _apply_force_quad9(self, line_force, coords, handedness='left'):
         # evenly distributed
-        if line_force.forces[0] == line_force.forces[1] == line_force.forces[2]:
+        if line_force.forces[0] == line_force.forces[1] == line_force.forces[2] or True:
             start, middle, end = line_force.nodes[0], line_force.nodes[1], line_force.nodes[2]
-            local_index_start, local_index_middle, local_index_end = self.nodes_index.index(start), self.nodes_index.index(middle) self.nodes_index.index(end)
+            local_index_start, local_index_middle, local_index_end = self.nodes_index.index(start), self.nodes_index.index(middle), self.nodes_index.index(end)
             q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
             t = self.thickness
             Pe = scipy.zeros(18)
@@ -103,7 +104,8 @@ class Element:
             Pe[2*local_index_end+1] = 1/6 * Fy
             
             self.load_vector += Pe
-            
+            return
+
         print('not implemented yet :-(')
         assert(0)
         
@@ -325,7 +327,7 @@ class Problem:
         out_file.close()
         
 def main():
-    p = Problem('hw3')
+    p = Problem('hw_quad9')
     p.solve()
     p.write_to_file()
     
