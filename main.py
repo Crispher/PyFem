@@ -1,6 +1,5 @@
 ''' 
 todo:
-    add quad9
     output stress
     sparse matrix
 '''    
@@ -59,7 +58,6 @@ class Element:
         if self.type == 'RECTANGLE9':
             self._apply_force_quad9(line_force, coords)
             return
-        print(self.type)
         assert(0)
         
     # keeping accordance with FEMT, use left handed forces by default
@@ -109,6 +107,14 @@ class Element:
         print('not implemented yet :-(')
         assert(0)
         
+    def compute_stress(self, ans, material, coords):
+        if self.type == 'RECTANGLE4':
+            self.stress = compute_stress_quad4(ans, material, coords)
+            return
+        if self.type == 'RECTANGLE9':
+            self.stress = compute_stress_quad4(ans, material, coords)
+            return
+        assert(0)
     def debug_print(self):
         print(self.type, self.nodes_index)
 
@@ -249,7 +255,7 @@ class Problem:
         
         self.K = scipy.zeros( (len(self.nodes)*2, len(self.nodes)*2) )
         self.P = scipy.zeros( len(self.nodes)*2 )
-        self.penalty = 1e13
+        self.penalty = 1e20
         self.ans = 0
         
         print('problem loaded')
@@ -302,6 +308,23 @@ class Problem:
             axis = 0 if disp[1] == 'U' else 1
             self.apply_displacement_condition(disp[0], axis, disp[2])
         
+    # average over all adjacent elements
+    def compute_stresses(self):
+        for e in self.elements:
+            e.compute_stress(
+                array([self.ans[i] for i in chain(*zip(map(lambda i : 2*i, e.nodes_index), map(lambda i : 2*i + 1, e.nodes_index)))]),
+                (self.materials[e.material].E, self.materials[e.material].v),
+                [self.nodes[i][:2] for i in e.nodes_index]
+            )
+        sum_stresses = [array([0., 0., 0.]) for i in range(len(self.nodes))]
+        count = [0 for i in range(len(self.nodes))]
+        for e in self.elements:
+            for i, n in enumerate(e.nodes_index): # i: local index, n: global index
+                # print(sum_stresses[n], e.stress[i])
+                sum_stresses[n] += e.stress[i]
+                count[n] += 1
+        return list(starmap(lambda v, n: v/n, zip(sum_stresses, count)))
+        
     def solve(self):
         self.compute_stiffness_matrices()
         self.assemble_stiffness_matrix()
@@ -309,6 +332,7 @@ class Problem:
         self.assemble_load_vector()
         self.apply_boundary_condition()
         self.ans = solve(self.K, self.P)
+        self.stresses = self.compute_stresses()
         print('problem solved')
         
     # write to '.OUT' file, and trick the post-process matlab script into work
@@ -321,13 +345,16 @@ class Problem:
                        '  NODE         SXX            SYY            SXY            SI            S2\n' + 
                        '----------------------------------------------------------------------------------\n')
         for i in range(len(self.nodes)):
-            out_file.write('\t' + str(i+1) + '\t0\t0\t0\t0\t0\n')
+            stress_tensor = array([[self.stresses[i][0], self.stresses[i][2]], [self.stresses[i][2], self.stresses[i][1] ] ])
+            eigen_values = eig(stress_tensor)[0]
+            out_file.write('\t' + str(i+1) + '\t' + str(self.stresses[i][0]) + '\t' + str(self.stresses[i][1]) + '\t' + str(self.stresses[i][2]) + 
+                '\t' + str(eigen_values[0].real) + '\t' + str(eigen_values[1].real) +'\n')
             
         out_file.write('PROGRAM STARTED // I am just tricking post-process.m into working\n')
         out_file.close()
         
 def main():
-    p = Problem('hw_quad9')
+    p = Problem('hw3')
     p.solve()
     p.write_to_file()
     
