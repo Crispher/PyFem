@@ -1,6 +1,5 @@
 ''' 
 todo:
-    output stress
     sparse matrix
 '''    
     
@@ -8,7 +7,7 @@ import scipy
 from scipy.linalg import solve
 from computation import *
     
-# utilities
+# IO utilities
 def read_line_args(file):
     while 1:
         line = file.readline()
@@ -112,7 +111,7 @@ class Element:
             self.stress = compute_stress_quad4(ans, material, coords)
             return
         if self.type == 'RECTANGLE9':
-            self.stress = compute_stress_quad4(ans, material, coords)
+            self.stress = compute_stress_quad9(ans, material, coords)
             return
         assert(0)
     def debug_print(self):
@@ -255,7 +254,7 @@ class Problem:
         
         self.K = scipy.zeros( (len(self.nodes)*2, len(self.nodes)*2) )
         self.P = scipy.zeros( len(self.nodes)*2 )
-        self.penalty = 1e20
+        self.penalty = 1e30         # the penalty parameter is tuned to fit the output of FEMT
         self.ans = 0
         
         print('problem loaded')
@@ -350,11 +349,11 @@ class Problem:
             out_file.write('\t' + str(i+1) + '\t' + str(self.stresses[i][0]) + '\t' + str(self.stresses[i][1]) + '\t' + str(self.stresses[i][2]) + 
                 '\t' + str(eigen_values[0].real) + '\t' + str(eigen_values[1].real) +'\n')
             
-        out_file.write('PROGRAM STARTED // I am just tricking post-process.m into working\n')
+        out_file.write('PROGRAM STARTED // no time recorede, I am just tricking post-process.m into working\n')
         out_file.close()
         
 def main():
-    p = Problem('hw3')
+    p = Problem('hw_quad9')
     p.solve()
     p.write_to_file()
     

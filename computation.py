@@ -1,4 +1,7 @@
-# computation module
+# computation module. rely on scipy library, but only a few non-trivial 
+# routines are used: inv, det, eig, the rest 'imports' are tools for functional
+# style programming.
+
 from scipy import *
 from scipy.linalg import inv, det, eig
 from itertools import product, chain, starmap
@@ -44,27 +47,28 @@ def compute_stiffness_matrix_quad4(nodes, material, thickness):
     # N3 = 1/4 (1+\xi) (1+\eta)         |      |
     # N4 = 1/4 (1-\xi) (1+\eta)         1 ---- 2
     
+    # dN_i/d xi, dN_i/d eta
+    def partials(xi, eta):
+        return 0.25 * array([
+            [eta-1, 1-eta, 1+eta, -1-eta],
+            [xi-1,  -1-xi, 1+xi,  1-xi]
+        ])
+        
     # the sub-process specific to this type of elements, calculates (4.2.6) at (\xi, \eta)
     def Jacobi(xi, eta):
-        partials = 0.25 * array([
-            [eta-1, 1-eta, 1+eta, -1-eta],
-            [xi-1,  -1-xi, 1+xi,  1-xi]
-        ])
+        p = partials(xi,eta)
         coords = row_stack(nodes)
-        return dot(partials, nodes)
+        return dot(p, nodes)
     
     # computes (dN_i/dx, dN_i/dy) at (\xi, \eta), (4.2.7)
-    def Partial_xy(xi, eta):
+    def partial_xy(xi, eta):
         J = Jacobi(xi, eta)
-        partial_xe = 0.25 * array([
-            [eta-1, 1-eta, 1+eta, -1-eta],
-            [xi-1,  -1-xi, 1+xi,  1-xi]
-        ])
+        partial_xe = partials(xi, eta)
         return dot(inv(J), partial_xe)
     
     # computes matrix B, eq (2.2.15), the multiplication of constant D_0 is delayed to final stage
     def compute_B(xi, eta):
-        p = Partial_xy(xi, eta)
+        p = partial_xy(xi, eta)
         return array([
             [ p[0,0],   0,      p[0,1], 0,      p[0,2], 0,      p[0,3], 0       ],
             [ 0,        p[1,0], 0,      p[1,1], 0,      p[1,2], 0,      p[1,3]  ],
@@ -80,8 +84,7 @@ def compute_stiffness_matrix_quad4(nodes, material, thickness):
         ans = dot(dot(transpose(B), D), B) * abs(det(J))
         return ans
     
-    i = dbl_gauss_quad(integrand, 2)
-    return thickness * i
+    return thickness * dbl_gauss_quad(integrand, 2)
         
 def compute_stiffness_matrix_quad9(nodes, material, thickness):
     # follow the same pattern as above quad4-method
@@ -96,7 +99,7 @@ def compute_stiffness_matrix_quad9(nodes, material, thickness):
     # N8 = 1/2 xi(xi-1) (1-eta^2)
     # N9 = (1-xi^2) (1-eta^2)
     
-    def Partials(xi, eta):
+    def partials(xi, eta):
         # better use a large screen to read this function :-)
         return 0.25 * array([
             [ (2*xi-1)*eta*(eta-1), (2*xi+1)*eta*(eta-1), (2*xi+1)*eta*(eta+1), (2*xi-1)*eta*(eta+1), -4*xi*eta*(eta-1),     2*(2*xi+1)*(1-eta**2), -4*xi*eta*(1+eta),     2*(2*xi-1)*(1-eta**2), -8*xi*(1-eta**2) ],
@@ -104,17 +107,17 @@ def compute_stiffness_matrix_quad9(nodes, material, thickness):
         ])
         
     def Jacobi(xi, eta):
-        partials = Partials(xi, eta)
+        p = partials(xi, eta)
         coords = row_stack(nodes)
-        return dot(partials, nodes)
+        return dot(p, nodes)
     
-    def Partial_xy(xi, eta):
+    def partial_xy(xi, eta):
         J = Jacobi(xi, eta)
-        partial_xe = Partials(xi, eta)
+        partial_xe = partials(xi, eta)
         return dot(inv(J), partial_xe)
         
     def compute_B(xi, eta):
-        p = Partial_xy(xi, eta)
+        p = partial_xy(xi, eta)
         zeros9 = [0 for i in range(9)]
         # the list(chain(*zip(~,~))) operation interleaves two arrays, if that is confusing to you, see quad4's implementation
         return array([
@@ -131,15 +134,8 @@ def compute_stiffness_matrix_quad9(nodes, material, thickness):
         ans = dot(dot(transpose(B), D), B) * abs(det(J))
         return ans
     
-    i = dbl_gauss_quad(integrand, 3)
-    return thickness * i
+    return thickness * dbl_gauss_quad(integrand, 3)
     
-def test():
-    nodes = array([ [0,0], [2,0], [2,2], [0,2], [1,0], [2,1], [1,2], [0,1], [1,1] ])
-    compute_stiffness_matrix_quad9(nodes, (1, 0.3), 1)
-    
-# test()
-
 def compute_stress_quad4(disp, material, nodes):
     def Jacobi(xi, eta):
         partials = 0.25 * array([
@@ -149,7 +145,7 @@ def compute_stress_quad4(disp, material, nodes):
         coords = row_stack(nodes)
         return dot(partials, nodes)
     
-    def Partial_xy(xi, eta):
+    def partial_xy(xi, eta):
         J = Jacobi(xi, eta)
         partial_xe = 0.25 * array([
             [eta-1, 1-eta, 1+eta, -1-eta],
@@ -158,7 +154,7 @@ def compute_stress_quad4(disp, material, nodes):
         return dot(inv(J), partial_xe)
     
     def B(xi, eta):
-        p = Partial_xy(xi, eta)
+        p = partial_xy(xi, eta)
         return array([
             [ p[0,0],   0,      p[0,1], 0,      p[0,2], 0,      p[0,3], 0       ],
             [ 0,        p[1,0], 0,      p[1,1], 0,      p[1,2], 0,      p[1,3]  ],
@@ -171,5 +167,36 @@ def compute_stress_quad4(disp, material, nodes):
     
     return [dot(D, e) for e in strain_at_nodes]
     
-def compute_stress_quad9(disp, material, coords):
-    pass
+def compute_stress_quad9(disp, material, nodes):
+    def partials(xi, eta):
+        # better use a large screen to read this function :-)
+        return 0.25 * array([
+            [ (2*xi-1)*eta*(eta-1), (2*xi+1)*eta*(eta-1), (2*xi+1)*eta*(eta+1), (2*xi-1)*eta*(eta+1), -4*xi*eta*(eta-1),     2*(2*xi+1)*(1-eta**2), -4*xi*eta*(1+eta),     2*(2*xi-1)*(1-eta**2), -8*xi*(1-eta**2) ],
+            [ xi*(xi-1)*(2*eta-1),  xi*(xi+1)*(2*eta-1),  xi*(xi+1)*(2*eta+1),  xi*(xi-1)*(2*eta+1),  2*(1-xi**2)*(2*eta-1), -4*xi*(xi+1)*eta,      2*(1-xi**2)*(2*eta+1), -4*xi*(xi-1)*eta,      -8*(1-xi**2)*eta ]
+        ])
+        
+    def Jacobi(xi, eta):
+        p = partials(xi, eta)
+        coords = row_stack(nodes)
+        return dot(p, nodes)
+    
+    def partial_xy(xi, eta):
+        J = Jacobi(xi, eta)
+        partial_xe = partials(xi, eta)
+        return dot(inv(J), partial_xe)
+        
+    def B(xi, eta):
+        p = partial_xy(xi, eta)
+        zeros9 = [0 for i in range(9)]
+        # the list(chain(*zip(~,~))) operation interleaves two arrays, if that is confusing to you, see quad4's implementation
+        return array([
+            list(chain(*zip(p[0,:], zeros9))),
+            list(chain(*zip(zeros9, p[1,:]))),
+            list(chain(*zip(p[1,:], p[0,:]))),
+        ])
+    
+    strain_at_nodes = [dot(B(-1,-1), disp), dot(B(1,-1), disp), dot(B(1, 1), disp), dot(B(-1, 1), disp), dot(B(0,-1), disp), 
+        dot(B(1,0), disp), dot(B(0,1), disp), dot(B(-1,0), disp), dot(B(0,0), disp)]
+    
+    D = get_D(*material)
+    return [dot(D, e) for e in strain_at_nodes]
