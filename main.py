@@ -1,18 +1,9 @@
-# load data;
-    # data structure;
-# determine data type;
-    # type of elements;
-# compute stiffness matrix for elements;
-    # what's the overall process // done
-# assemble
-    # seems easy
-    # apply boundary condition // done
-# compute
-    # seems easy
-    # use sparse matrices ?
-# output
-    # easy
-    
+''' 
+todo:
+    add quad9
+    output stress
+    sparse matrix
+'''    
     
 import scipy
 from scipy.linalg import solve
@@ -31,8 +22,8 @@ def read_line_args(file):
 # data structure
 class Material:
     def __init__(self):
-        E = 2.1e9
-        v = 0.3
+        self.E = 2.1e9
+        self.v = 0.3
 
 class LineForce:
     def __init__(self, args):
@@ -88,15 +79,39 @@ class Element:
             self.load_vector += Pe
             return
         print('not implemented yet :-(')
+        assert(0)
         
-    def _apply_force_quad9(self, line_force, coords):
-        pass
+    def _apply_force_quad9(self, line_force, coords, handedness='left'):
+        # evenly distributed
+        if line_force.forces[0] == line_force.forces[1] == line_force.forces[2]:
+            start, middle, end = line_force.nodes[0], line_force.nodes[1], line_force.nodes[2]
+            local_index_start, local_index_middle, local_index_end = self.nodes_index.index(start), self.nodes_index.index(middle) self.nodes_index.index(end)
+            q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
+            t = self.thickness
+            Pe = scipy.zeros(18)
+            
+            Dx = coords[local_index_end][0] - coords[local_index_start][0]
+            Dy = coords[local_index_end][1] - coords[local_index_start][1]
+            Fx = -q * t * Dy
+            Fy = q * t * Dx
+            
+            Pe[2*local_index_start] = 1/6 * Fx
+            Pe[2*local_index_start+1] = 1/6 * Fy
+            Pe[2*local_index_middle] = 2/3 * Fx
+            Pe[2*local_index_middle+1] = 2/3 * Fy
+            Pe[2*local_index_end] = 1/6 * Fx
+            Pe[2*local_index_end+1] = 1/6 * Fy
+            
+            self.load_vector += Pe
+            
+        print('not implemented yet :-(')
+        assert(0)
         
     def debug_print(self):
         print(self.type, self.nodes_index)
 
-        
-        
+
+# central part
 class Problem:
     
     def load_ctr(self, ctr_file):
@@ -105,8 +120,7 @@ class Problem:
         mode = 'NULL'
         data = 'NULL'
         
-        num_nodes, num_elements, num_materials = 0, 0, 0
-        
+        num_nodes, num_elements, num_materials = 0, 0, 0    
         temp_material_index = -1
         
         args = read_line_args(file)        
@@ -295,6 +309,7 @@ class Problem:
         self.ans = solve(self.K, self.P)
         print('problem solved')
         
+    # write to '.OUT' file, and trick the post-process matlab script into work
     def write_to_file(self):
         out_file = open(self.proj_name + '.OUT', 'w')
         out_file.write(' *** DISPLACEMENT ***\n  NODE         U              V\n-----------------------------------\n')
@@ -306,7 +321,7 @@ class Problem:
         for i in range(len(self.nodes)):
             out_file.write('\t' + str(i+1) + '\t0\t0\t0\t0\t0\n')
             
-        out_file.write('PROGRAM STARTED\n')
+        out_file.write('PROGRAM STARTED // I am just tricking post-process.m into working\n')
         out_file.close()
         
 def main():
