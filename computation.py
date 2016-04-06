@@ -3,7 +3,7 @@
 # style programming.
 
 from scipy import *
-from scipy.linalg import inv, det, eig
+from scipy.linalg import inv, det, eig, solve
 from itertools import product, chain, starmap
 
 # integrate func over [-1, 1]^2 using k-order gauss quad
@@ -161,11 +161,20 @@ def compute_stress_quad4(disp, material, nodes):
             [ p[1,0],   p[0,0], p[1,1], p[0,1], p[1,2], p[0,2], p[1,3], p[0,3]  ],
         ])
     
-    strain_at_nodes = [dot(B(-1,-1), disp), dot(B(1,-1), disp), dot(B(1, 1), disp), dot(B(-1, 1), disp)]
+    strain_at_gaussian_nodes = [dot(B(-1/sqrt(3),-1/sqrt(3)), disp), dot(B(1/sqrt(3),-1/sqrt(3)), disp), dot(B(1/sqrt(3), 1/sqrt(3)), disp), dot(B(-1/sqrt(3), 1/sqrt(3)), disp)]
+    
+    p, q = 1+1/sqrt(3), 1-1/sqrt(3)
+    weight_matrix = 1/4 * array([
+        [p*p, p*q, q*q, q*p],
+        [p*q, p*p, p*q, q*q],
+        [q*q, p*q, p*p, p*q],
+        [p*q, q*q, p*q, p*p]
+    ])
     
     D = get_D(*material)
     
-    return [dot(D, e) for e in strain_at_nodes]
+    stress_at_gaussian_nodes = array([dot(D, e) for e in strain_at_gaussian_nodes])
+    return dot(inv(weight_matrix), stress_at_gaussian_nodes)
     
 def compute_stress_quad9(disp, material, nodes):
     def partials(xi, eta):

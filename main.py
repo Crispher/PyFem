@@ -1,10 +1,3 @@
-''' 
-todo:
-    sparse matrix
-'''    
-    
-import scipy
-from scipy.linalg import solve
 from computation import *
     
 # IO utilities
@@ -28,6 +21,7 @@ class LineForce:
         self.element_index = int(args[0]) - 1
         num_nodes = (len(args) - 3) // 2
         self.nodes = list(map(lambda s: int(s)-1, args[2:2+num_nodes]))
+        self.direction = args[2+num_nodes]
         self.forces = list(map(float, args[-num_nodes:]))
         
     
@@ -63,19 +57,25 @@ class Element:
     def _apply_force_quad4(self, line_force, coords, handedness='left'):
         # evenly distributed pressure
         if line_force.forces[0] == line_force.forces[1]:
-            start, end = line_force.nodes[0], line_force.nodes[1]
-            local_index_start, local_index_end = self.nodes_index.index(start), self.nodes_index.index(end)
-            assert(abs(local_index_end%4 - local_index_start%4) == 1)
-            q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
-            t = self.thickness
-            Pe = scipy.zeros(8)
-            Pe[2*local_index_start] = coords[local_index_start][1] - coords[local_index_end][1]
-            Pe[2*local_index_start+1] = coords[local_index_end][0] - coords[local_index_start][0]
-            Pe[2*local_index_end] = coords[local_index_start][1] - coords[local_index_end][1]
-            Pe[2*local_index_end+1] = coords[local_index_end][0] - coords[local_index_start][0]
-            Pe *= 0.5 * q * t   # eq (2.2.50) on P68
-            self.load_vector += Pe
-            return
+            if line_force.direction == 'F_N':
+                start, end = line_force.nodes[0], line_force.nodes[1]
+                local_index_start, local_index_end = self.nodes_index.index(start), self.nodes_index.index(end)
+                assert(abs(local_index_end%4 - local_index_start%4) == 1)
+                q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
+                t = self.thickness
+                Pe = scipy.zeros(8)
+                Pe[2*local_index_start] = coords[local_index_start][1] - coords[local_index_end][1]
+                Pe[2*local_index_start+1] = coords[local_index_end][0] - coords[local_index_start][0]
+                Pe[2*local_index_end] = coords[local_index_start][1] - coords[local_index_end][1]
+                Pe[2*local_index_end+1] = coords[local_index_end][0] - coords[local_index_start][0]
+                Pe *= 0.5 * q * t   # eq (2.2.50) on P68
+                self.load_vector += Pe
+                return
+            if line_force.direction == 'F_T':
+                pass
+            print(line_force.direction)
+            assert(0)
+            
         print('not implemented yet :-(')
         assert(0)
         
@@ -353,7 +353,7 @@ class Problem:
         out_file.close()
         
 def main():
-    p = Problem('hw_quad9')
+    p = Problem('hw3')
     p.solve()
     p.write_to_file()
     
