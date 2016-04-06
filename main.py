@@ -377,10 +377,14 @@ class Problem:
             
         out_file.write('PROGRAM STARTED // no time recoreded, I am just tricking post-process.m into working\n')
         out_file.close()
-        
+      
+
+import sys
 def main():
-    p = Problem('hw3')
-    p.solve()
-    p.write_to_file()
-    
+    if len(sys.argv) > 1:
+        p = Problem(sys.argv[1])
+        p.solve()
+        p.write_to_file()
+    else:
+        print("usage: main.py proj_name")
 main()
