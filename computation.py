@@ -76,30 +76,31 @@ def compute_stiffness_matrix(type, nodes, material, thickness):
 Implementation detail, things become generic now. This pattern fits all types of nodes
 '''
     
-def get_matrix(B=False, Jacobi=False, nodes, partials, xi, eta):
-    assert(B or Jacobi)
-    coords = row_stack(nodes)
+def get_matrix(nodes, partials, xi, eta, _B=False, Jacobi=False):
+    assert(_B or Jacobi)
     p_xe = partials(xi,eta)
     J = dot(p_xe, nodes)
-    if not B:
+    if not _B:
         return J
     else:
         # partials with respect to x, y
         p = dot(inv(J), p_xe)
         _zeros = [0 for i in range(num_nodes)]
-        _B = array([
+        B = array([
             list(chain(*zip(p[0,:], _zeros))),
             list(chain(*zip(_zeros, p[1,:]))),
             list(chain(*zip(p[1,:], p[0,:]))),
         ])
-        return _B, J
+        if Jacobi:
+            return B, J
+        else:
+            return B
     
 # the 'partials' argument passes a function to compute d(N_i)/d(xi, eta) at (xi, eta)
 def compute_stiffness_matrix_quad(nodes, material, thickness, partials, integral_order=2):
 
     # calculates (4.2.6) at (\xi, \eta)
     def Jacobi(xi, eta):
-        coords = row_stack(nodes)
         return dot(partials(xi,eta), nodes)
     
     # computes (dN_i/dx, dN_i/dy) at (\xi, \eta), (4.2.7)
@@ -122,8 +123,9 @@ def compute_stiffness_matrix_quad(nodes, material, thickness, partials, integral
     
     # integrand of eq (4.4.1)
     def integrand(xi, eta):
-        J = Jacobi(xi, eta)
-        B = compute_B(xi, eta)
+        # J = Jacobi(xi, eta)
+        # B = compute_B(xi, eta)
+        B, J = get_matrix(nodes, partials, xi, eta, _B=True, Jacobi=True)
         return dot(dot(transpose(B), D), B) * abs(det(J))
     
     return thickness * dbl_gauss_quad(integrand, integral_order)
