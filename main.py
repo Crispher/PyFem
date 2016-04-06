@@ -43,7 +43,7 @@ class Element:
         
     def apply_force(self, line_force, coords):
         if not self.loaded:
-            self.load_vector = scipy.zeros(2*len(self.nodes_index))
+            self.load_vector = zeros(2*len(self.nodes_index))
             self.loaded = True
         if self.type == 'RECTANGLE4':
             self._apply_force_quad4(line_force, coords)
@@ -55,56 +55,81 @@ class Element:
         
     # keeping accordance with FEMT, use left handed forces by default
     def _apply_force_quad4(self, line_force, coords, handedness='left'):
-        # evenly distributed pressure
-        if line_force.forces[0] == line_force.forces[1]:
-            if line_force.direction == 'F_N':
-                start, end = line_force.nodes[0], line_force.nodes[1]
-                local_index_start, local_index_end = self.nodes_index.index(start), self.nodes_index.index(end)
-                assert(abs(local_index_end%4 - local_index_start%4) == 1)
-                q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
-                t = self.thickness
-                Pe = scipy.zeros(8)
-                Pe[2*local_index_start] = coords[local_index_start][1] - coords[local_index_end][1]
-                Pe[2*local_index_start+1] = coords[local_index_end][0] - coords[local_index_start][0]
-                Pe[2*local_index_end] = coords[local_index_start][1] - coords[local_index_end][1]
-                Pe[2*local_index_end+1] = coords[local_index_end][0] - coords[local_index_start][0]
-                Pe *= 0.5 * q * t   # eq (2.2.50) on P68
-                self.load_vector += Pe
-                return
-            if line_force.direction == 'F_T':
-                pass
-            print(line_force.direction)
-            assert(0)
+        start, end = line_force.nodes[0], line_force.nodes[1]
+        local_index_start, local_index_end = self.nodes_index.index(start), self.nodes_index.index(end)
+        if handedness == 'left':
+            q_start = -line_force.forces[0]
+            q_end = -line_force.forces[1]
+        else:
+            q_start = line_force.forces[0]
+            q_end = line_force.forces[1]
             
-        print('not implemented yet :-(')
-        assert(0)
+        t = self.thickness
+        Dx = coords[local_index_end][0] - coords[local_index_start][0]
+        Dy = coords[local_index_end][1] - coords[local_index_start][1]
+
+        if line_force.direction == 'F_N':                
+            Fx_start = -(1/3 * q_start + 1/6 * q_end) * t * Dy
+            Fy_start = (1/3 * q_start + 1/6 * q_end) * t * Dx
+            Fx_end = -(1/6 * q_start + 1/3 * q_end) * t * Dy
+            Fy_end = (1/6 * q_start + 1/3 * q_end) * t * Dx
+        elif line_force.direction == 'F_T':
+            Fx_start = Dx * (1/3 * q_start + 1/6 * q_end) * t
+            Fy_start = Dy * (1/3 * q_start + 1/6 * q_end) * t
+            Fx_end = Dx * (1/6 * q_start + 1/3 * q_end) * t
+            Fy_end = Dy * (1/6 * q_start + 1/3 * q_end) * t
+                    
+        Pe = zeros(8)
+        Pe[2*local_index_start] = Fx_start
+        Pe[2*local_index_start+1] = Fy_start
+        Pe[2*local_index_end] = Fx_end
+        Pe[2*local_index_end+1] = Fy_end
+        self.load_vector += Pe
+        
         
     def _apply_force_quad9(self, line_force, coords, handedness='left'):
-        # evenly distributed
-        if line_force.forces[0] == line_force.forces[1] == line_force.forces[2] or True:
-            start, middle, end = line_force.nodes[0], line_force.nodes[1], line_force.nodes[2]
-            local_index_start, local_index_middle, local_index_end = self.nodes_index.index(start), self.nodes_index.index(middle), self.nodes_index.index(end)
-            q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
-            t = self.thickness
-            Pe = scipy.zeros(18)
+        start, middle, end = line_force.nodes[0], line_force.nodes[1], line_force.nodes[2]
+        local_index_start, local_index_middle, local_index_end = self.nodes_index.index(start), self.nodes_index.index(middle), self.nodes_index.index(end)
+        q = -line_force.forces[0] if handedness == 'left' else line_force.forces[0]
+        
+        if handedness == 'left':
+            q_start = -line_force.forces[0]
+            q_middle = -line_force.forces[1]
+            q_end = -line_force.forces[2]
+        else:
+            assert(0)
+        
+        t = self.thickness
+        Pe = zeros(18)
+        
+        Dx = coords[local_index_end][0] - coords[local_index_start][0]
+        Dy = coords[local_index_end][1] - coords[local_index_start][1]
+        
+        # integrations by hand. :-(
+        if line_force.direction == 'F_N':
+            Fx_start = -(4/30 * q_start + 2/30 * q_middle - 1/30 * q_end) * t * Dy
+            Fy_start = (4/30 * q_start + 2/30 * q_middle - 1/30 * q_end) * t * Dx
+            Fx_middle = -(2/30 * q_start + 16/30 * q_middle + 2/30 * q_end) * t * Dy
+            Fy_middle = (2/30 * q_start + 16/30 * q_middle + 2/30 * q_end) * t * Dx
+            Fx_end = -(-1/30 * q_start + 2/30 * q_middle + 4/30 * q_end) * t * Dy
+            Fy_end = (-1/30 * q_start + 2/30 * q_middle + 4/30 * q_end) * t * Dx
+        elif line_force.direction == 'F_T':
+            Fx_start = (4/30 * q_start + 2/30 * q_middle - 1/30 * q_end) * t * Dx
+            Fy_start = (4/30 * q_start + 2/30 * q_middle - 1/30 * q_end) * t * Dy
+            Fx_middle = (2/30 * q_start + 16/30 * q_middle + 2/30 * q_end) * t * Dx
+            Fy_middle = (2/30 * q_start + 16/30 * q_middle + 2/30 * q_end) * t * Dy
+            Fx_end = (-1/30 * q_start + 2/30 * q_middle + 4/30 * q_end) * t * Dx
+            Fy_end = (-1/30 * q_start + 2/30 * q_middle + 4/30 * q_end) * t * Dy
             
-            Dx = coords[local_index_end][0] - coords[local_index_start][0]
-            Dy = coords[local_index_end][1] - coords[local_index_start][1]
-            Fx = -q * t * Dy
-            Fy = q * t * Dx
-            
-            Pe[2*local_index_start] = 1/6 * Fx
-            Pe[2*local_index_start+1] = 1/6 * Fy
-            Pe[2*local_index_middle] = 2/3 * Fx
-            Pe[2*local_index_middle+1] = 2/3 * Fy
-            Pe[2*local_index_end] = 1/6 * Fx
-            Pe[2*local_index_end+1] = 1/6 * Fy
-            
-            self.load_vector += Pe
-            return
-
-        print('not implemented yet :-(')
-        assert(0)
+        Pe[2*local_index_start] = Fx_start
+        Pe[2*local_index_start+1] = Fy_start
+        Pe[2*local_index_middle] = Fx_middle
+        Pe[2*local_index_middle+1] = Fy_middle
+        Pe[2*local_index_end] = Fx_end
+        Pe[2*local_index_end+1] = Fy_end
+        
+        self.load_vector += Pe
+        return
         
     def compute_stress(self, ans, material, coords):
         if self.type == 'RECTANGLE4':
@@ -141,7 +166,7 @@ class Problem:
             
             elif args[0].isdigit() and not args[1] == 'TO':
                 if data == 'COORDINATES':
-                    self.nodes = self.nodes + [scipy.array([x for x in map(float, args[1:])])]
+                    self.nodes = self.nodes + [array([x for x in map(float, args[1:])])]
                 elif data == 'ELEMENT_NODES':
                     index = int(args[0]) - 1
                     self.elements[index].nodes_index = [x for x in map(lambda s: int(s) - 1, args[1:])]
@@ -200,7 +225,8 @@ class Problem:
                     data = 'NULL'
                     
             else:
-                print('ignored arguments: ', args[0])
+                # print('ignored arguments: ', args[0])
+                pass
   
             # go on for another loop
             args = read_line_args(file)
@@ -235,7 +261,8 @@ class Problem:
                 if args[1] in ['DISPLACEMENT', 'FORCE']:
                     mode = 'NULL'
             else:
-                print('ignored arguments: ', args[0])
+                # print('ignored arguments: ', args[0])
+                pass
             args = read_line_args(file)
             
         assert(num_disp_conds == len(self.boundary_condition.displacement) and
@@ -252,8 +279,8 @@ class Problem:
         self.load_ctr(proj_name+'.ctr')
         self.load_bnd(proj_name+'.bnd')
         
-        self.K = scipy.zeros( (len(self.nodes)*2, len(self.nodes)*2) )
-        self.P = scipy.zeros( len(self.nodes)*2 )
+        self.K = zeros( (len(self.nodes)*2, len(self.nodes)*2) )
+        self.P = zeros( len(self.nodes)*2 )
         self.penalty = 1e30         # the penalty parameter is tuned to fit the output of FEMT
         self.ans = 0
         
@@ -319,7 +346,6 @@ class Problem:
         count = [0 for i in range(len(self.nodes))]
         for e in self.elements:
             for i, n in enumerate(e.nodes_index): # i: local index, n: global index
-                # print(sum_stresses[n], e.stress[i])
                 sum_stresses[n] += e.stress[i]
                 count[n] += 1
         return list(starmap(lambda v, n: v/n, zip(sum_stresses, count)))
@@ -349,7 +375,7 @@ class Problem:
             out_file.write('\t' + str(i+1) + '\t' + str(self.stresses[i][0]) + '\t' + str(self.stresses[i][1]) + '\t' + str(self.stresses[i][2]) + 
                 '\t' + str(eigen_values[0].real) + '\t' + str(eigen_values[1].real) +'\n')
             
-        out_file.write('PROGRAM STARTED // no time recorede, I am just tricking post-process.m into working\n')
+        out_file.write('PROGRAM STARTED // no time recoreded, I am just tricking post-process.m into working\n')
         out_file.close()
         
 def main():

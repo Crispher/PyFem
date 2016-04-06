@@ -1,10 +1,7 @@
-# computation module. rely on scipy library, but only a few non-trivial 
-# routines are used: inv, det, eig, the rest 'imports' are tools for functional
-# style programming.
-
-from scipy import *
-from scipy.linalg import inv, det, eig, solve
-from itertools import product, chain, starmap
+# computation module. rely on scipy library.
+from scipy import *                             # basic vector operations
+from scipy.linalg import inv, det, eig, solve   # 4 linear algebra functions  
+from itertools import product, chain, starmap   # functional programming tools
 
 # integrate func over [-1, 1]^2 using k-order gauss quad
 def dbl_gauss_quad(func, k):
@@ -197,15 +194,28 @@ def compute_stress_quad9(disp, material, nodes):
     def B(xi, eta):
         p = partial_xy(xi, eta)
         zeros9 = [0 for i in range(9)]
-        # the list(chain(*zip(~,~))) operation interleaves two arrays, if that is confusing to you, see quad4's implementation
         return array([
             list(chain(*zip(p[0,:], zeros9))),
             list(chain(*zip(zeros9, p[1,:]))),
             list(chain(*zip(p[1,:], p[0,:]))),
         ])
-    
-    strain_at_nodes = [dot(B(-1,-1), disp), dot(B(1,-1), disp), dot(B(1, 1), disp), dot(B(-1, 1), disp), dot(B(0,-1), disp), 
-        dot(B(1,0), disp), dot(B(0,1), disp), dot(B(-1,0), disp), dot(B(0,0), disp)]
-    
+        
     D = get_D(*material)
-    return [dot(D, e) for e in strain_at_nodes]
+    
+    # only want 4 nodes with high precision
+    strain_at_internal_nodes = [dot(B(0,-1), disp), dot(B(1,0), disp), dot(B(0,1), disp), dot(B(-1,0), disp), dot(B(0,0), disp)]
+        
+    strain_at_gaussian_nodes = [dot(B(-sqrt(3/5),-sqrt(3/5)), disp), dot(B(sqrt(3/5),-sqrt(3/5)), disp), dot(B(sqrt(3/5), sqrt(3/5)), disp), dot(B(-sqrt(3/5), sqrt(3/5)), disp)]
+    
+    p, q = 1+1/sqrt(3), 1-1/sqrt(3)
+    weight_matrix = 1/4 * array([
+        [p*p, p*q, q*q, q*p],
+        [p*q, p*p, p*q, q*q],
+        [q*q, p*q, p*p, p*q],
+        [p*q, q*q, p*q, p*p]
+    ])
+    
+    stress_at_gaussian_nodes = array([dot(D, e) for e in strain_at_gaussian_nodes])
+    stress_at_corner_nodes = dot(inv(weight_matrix), stress_at_gaussian_nodes)  # high precision
+    stress_at_internal_nodes = [dot(D, e) for e in strain_at_internal_nodes]    # low precision
+    return row_stack((stress_at_corner_nodes, stress_at_internal_nodes))
